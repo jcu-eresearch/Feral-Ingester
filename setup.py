@@ -1,5 +1,5 @@
-# Viasala Weather Station (WXT530) logger and uploader.
-# Copyright (C) 2016  NigelB
+# FeralDecoder decodes data from the Environmental Sensor Nodes and Uploads it to the Sensor Cloud.
+# Copyright (C) 2017  NigelB
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
