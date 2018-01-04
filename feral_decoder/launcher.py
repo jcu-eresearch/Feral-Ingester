@@ -45,6 +45,10 @@ def upload():
 def unpack():
     init("feral_json_unpack reads in a newline-delimited JSON file and unpacks it into the cache directory.")
 
+def groups():
+    sys.argv[0] = "feral_decoder_create_groups"
+    from feral_decoder.create_groups import main
+    main()
 
 def streams():
     sys.argv[0] = "feral_decoder_create_streams"
