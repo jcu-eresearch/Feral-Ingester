@@ -20,7 +20,7 @@ import logging
 import sensor_cloud
 
 from feral_decoder.commandline import init
-from feral_decoder.constants import prefix
+from feral_decoder.constants import KeyConstants as kc
 
 
 def run():
@@ -32,7 +32,7 @@ def run():
 
     for sensor_id in SensorConfig.sensors:
 
-        sensor_prefix = SensorConfig.sensors[sensor_id][prefix]
+        sensor_prefix = SensorConfig.sensors[sensor_id][kc.prefix]
         group = sensor_prefix
 
         sensor_id_prefix = "%s.%s"%(sensor_prefix, sensor_id)
@@ -63,7 +63,7 @@ def run():
             logger.info("Location: %s already exists, skipping."%location)
 
 def main():
-    init()
+    init("feral_decoder_create_locations creates the sensor-cloud.io locations to attach the data streams to.")
     run()
 
 if __name__ == "__main__":
