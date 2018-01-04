@@ -33,6 +33,7 @@ setup(name='FeralDecoder',
           "console_scripts": [
               "feral_decoder_create_locations = feral_decoder.create_locations:main",
               "feral_decoder_create_streams = feral_decoder.create_streams:main",
+              "feral_decoder_create_groups = feral_decoder.create_groups:main",
               "feral_decoder_upload = feral_decoder.launcher:upload",
               "feral_json_unpack = feral_decoder.unpack:unpack",
           ]
