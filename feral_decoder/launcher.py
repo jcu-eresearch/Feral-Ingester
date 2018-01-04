@@ -14,15 +14,33 @@
 # You should have received a copy of the GNU General Public License along
 # with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+import logging
 
 from feral_decoder.commandline import init
 import sys
 
+_as = "args"
+_kw = "kwargs"
+
+logger = logging.getLogger("Launcher")
+
 def upload():
     sys.argv[0] = "feral_decoder_upload"
-    init("feral_decoder_upload uploads any cache entries and then archives the cache entry.")
+    args = init("feral_decoder_upload uploads any cache entries and then archives the cache entry.",
+         args=[
+             {
+                 _as:["--no_decache"],
+                 _kw:{"action":"store_true", "default": False, "dest": "no_decache", "help":"This will process the cache"+
+                      "file normally, but will not remove it from the cache. Normally used for testing."}
+             },
+             {
+                 _as:["--ignore_ts"],
+                 _kw:{"action":"store_true", "default":False, "dest":"ignore_ts", "help":"Ignore the nodes timestamp file."}
+             }
+         ])
     from feral_decoder.upload import Uploader
-    Uploader().run()
+    logger.log(logging.TRACE, "Args: %s"%args)
+    Uploader(args).run()
 
 def unpack():
     init("feral_json_unpack reads in a newline-delimited JSON file and unpacks it into the cache directory.")
