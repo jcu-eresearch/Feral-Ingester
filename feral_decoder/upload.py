@@ -40,7 +40,7 @@ from feral_decoder.constants import KeyConstants as kc, FeralCacheRollType
 from feral_decoder.constants import FeralConstants as fc
 
 try:
-    from FeralDecoder_Paths import cache_dir, archive_dir, node_dir
+    from FeralDecoder_Paths import cache_dir, archive_dir, node_dir, unknown_dir
     from FeralDecoder_Sensors import sensors
     import FeralDecoder_SensorCloudConfig
     from FeralDecoder_Sensors import sensors
@@ -54,8 +54,9 @@ except:
 class Uploader:
     logger = logging.getLogger("Uploader")
 
-    def __init__(self):
-        self.archive_fn = None
+    def __init__(self, args):
+        self.archive_fn = {}
+        self.args = args
 
     def adjust_time(self, unpacked, offset):
         for result in unpacked['results']:
@@ -90,42 +91,51 @@ class Uploader:
             self.post_observation(api_instance, "%s.%s" % (sensor_prefix, fc.Lux), result['lux'], result['time_'])
             self.post_observation(api_instance, "%s.%s" % (sensor_prefix, fc.BatteryVoltage), result['battery'], result['time_'])
 
-    def calculate_archive_file(self, type_name):
+    def calculate_archive_file(self, directory, type_name):
         current = datetime.datetime.now()
 
-        if self.archive_fn is None:
+        if type_name not in self.archive_fn:
             if FeralConfig.cache_period_type == FeralCacheRollType.Monthly:
-                self.archive_fn = "%s-%s.json" % (type_name, current.strftime("%Y-%m"))
+                self.archive_fn[type_name] = "%s-%s.json" % (type_name, current.strftime("%Y-%m"))
             elif FeralConfig.cache_period_type == FeralCacheRollType.Period:
                 time.mktime(current.timetuple())
 
-            self.archive_fn = os.path.join(archive_dir, self.archive_fn)
 
-    def cache(self, entry, type_name):
+            self.archive_fn[type_name] = os.path.join(directory, self.archive_fn[type_name])
+        return self.archive_fn[type_name]
+
+    def archive_entry(self, entry, archive_directory, type_name):
         try:
-            self.calculate_archive_file(type_name)
-            with open(self.archive_fn, "a") as do:
+            archive_fn = self.calculate_archive_file(archive_directory, type_name)
+            with open(archive_fn, "a") as do:
                 do.write(json.dumps(entry))
                 do.write(os.linesep)
             return True
         except:
-            pass
+            self.logger.exception("Error caching file: ")
 
         return False
 
     def cleanup(self):
-        self.cleanup_type(kc.uplink)
-        self.cleanup_type(kc.unknown)
+        self.cleanup_type(archive_dir, kc.uplink)
+        self.cleanup_type(unknown_dir, kc.unknown)
 
-    def cleanup_type(self, type):
-        self.calculate_archive_file(type)
+    def cleanup_type(self, directory, type):
+        archive_fn = self.calculate_archive_file(directory, type)
 
-        for archive_file in glob.glob1(archive_dir, "*.json"):
-            fn = os.path.abspath(os.path.join(archive_dir, archive_file))
-            if fn != os.path.abspath(self.archive_fn):
+        for archive_file in glob.glob1(directory, "*.json"):
+            fn = os.path.abspath(os.path.join(directory, archive_file))
+            if fn != os.path.abspath(archive_fn):
                 self.logger.info("Compressing old archive: %s"%fn)
-                with open(fn, 'rb') as f_in, gzip.open(fn+'.gz', 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
+                if not os.path.exists(fn+'.gz'):
+                    try:
+                        with open(fn, 'rb') as f_in, gzip.open(fn+'.gz', 'wb') as f_out:
+                            shutil.copyfileobj(f_in, f_out)
+                        os.remove(fn)
+                    except:
+                        self.logger.error("Error cleaning up archive: "%fn)
+                else:
+                    self.logger.error("Compressing Archive: %s, aborted as the destination file: %s.gz already exists"%(fn, fn))
 
     def run(self):
 
@@ -142,7 +152,7 @@ class Uploader:
             # Ignore the entry if the node id is not in the configured list
             if entry["devEUI"] not in sensors:
                 self.logger.error("Node: %s not in FeralDecoder_Sensors.sensors, ignoring." % entry["devEUI"])
-                if self.cache(entry, kc.unknown):
+                if self.archive_entry(entry, unknown_dir, kc.unknown):
                     try:
                         os.remove(cache_entry_fn)
                         self.logger.log(logging.TRACE, "Removed cache entry: %s", cache_entry_fn)
@@ -165,10 +175,15 @@ class Uploader:
 
             # Ignore the entry if it is older than the last transmission
             if last_time is not None and rx_time - last_time <= 0:
-                self.logger.error(
-                    "Reading for sensor (%s) found that is older than or equal to the time of the last entry." % entry[
+                if self.args.ignore_ts:
+                    self.logger.error(
+                        "IGNORING - Reading for sensor (%s) found that is older than or equal to the time of the last entry." % entry[
                         "devEUI"])
-                continue
+                else:
+                    self.logger.error(
+                        "Reading for sensor (%s) found that is older than or equal to the time of the last entry." % entry[
+                            "devEUI"])
+                    continue
 
             unpacked = unpack_data(entry['data'])
             first_record = unpacked['results'][0]
@@ -190,10 +205,13 @@ class Uploader:
             self.adjust_time(unpacked, offset)
             self.upload(entry, unpacked, count)
 
-            if self.cache(entry, kc.uplink):
+            if self.archive_entry(entry, archive_dir, kc.uplink):
                 try:
-                    os.remove(cache_entry_fn)
-                    self.logger.log(logging.TRACE, "Removed cache entry: %s", cache_entry_fn)
+                    if not self.args.no_decache:
+                        os.remove(cache_entry_fn)
+                        self.logger.log(logging.TRACE, "Removed cache entry: %s", cache_entry_fn)
+                    else:
+                        self.logger.log(logging.TRACE, "Not removing cache entry: %s", cache_entry_fn)
                 except:
                     self.logger.exception("Error removing cache entry: %s"%cache_entry_fn)
 
